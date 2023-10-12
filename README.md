@@ -1,0 +1,1 @@
+Test code for an image cropping tool made with JavaScript/svelte, for use in [the official eludris client](https://github.com/eludris/client).
