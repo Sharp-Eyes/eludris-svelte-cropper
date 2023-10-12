@@ -1,11 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { parseGIF, decompressFrames } from 'gifuct-js'
+  import GIF from 'gif.js'
 
   const BOX_HEIGHT = 150;
   const BOX_WIDTH = 900;
 
   let image: HTMLImageElement;
   let canvas: HTMLCanvasElement;
+  let tempCanvas: HTMLCanvasElement;
 
   let dragging = false;
   let imageX = 0;
@@ -17,6 +20,8 @@
   let scale = 1;
 
   onMount(() => {
+    tempCanvas = document.createElement('canvas')
+
     xBoundary = (image.width - BOX_WIDTH) / 2;
     yBoundary = (image.height - BOX_HEIGHT) / 2;
     updateImagePosition();
@@ -69,7 +74,6 @@
 
   const mouseMove = (e: MouseEvent) => {
     if (dragging) {
-      console.log(e.x, lastX)
       // Divide move distance by scale to slow down movement when zoomed.
       imageX += (e.x - lastX) / scale;
       imageY += (e.y - lastY) / scale;
@@ -79,6 +83,69 @@
     }
   };
 
+  async function doCrop() {
+    let imageResponse = await fetch(image.src);
+    let contentType = imageResponse.headers.get('content-type');
+
+    if (contentType == 'image/gif') {
+      await cropGif(imageResponse);
+    } else {
+      cropImage();
+    }
+  }
+  
+  async function cropGif(resp: Response) {
+    // Actual destination canvas ctx, same size as the crop box.
+    const ctx = canvas.getContext('2d')!;
+    // Intermediary canvas ctx, same size as the gif.
+    const tempCtx = tempCanvas.getContext('2d')!
+
+    const GifBuilder = new GIF({
+      workers: 2,
+      quality: 10,
+      workerScript: "/src/gif.worker.js",
+    });
+
+    // Parse gif and prepare temp canvas
+    let inputGif = parseGIF(await (resp).arrayBuffer());
+    let frames = decompressFrames(inputGif, true);
+    
+    tempCanvas.width = image.width;
+    tempCanvas.height = image.height;
+    let imageData = tempCtx.createImageData(image.width, image.height);
+
+    // Loop over each frame, paste it on the temp canvas, and crop it onto the main canvas.
+    frames.forEach((frame) => {
+      imageData.data.set(frame.patch);
+      tempCtx.putImageData(imageData, 0, 0);
+
+      // Fill with transparency in case the crop is smaller than the crop box size.
+      ctx.fillStyle = "transparent"
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+      ctx.drawImage(
+        tempCanvas,
+        (image.width - BOX_WIDTH/scale)/2 - imageX,
+        (image.height - BOX_HEIGHT/scale)/2 - imageY,
+        BOX_WIDTH / scale,
+        BOX_HEIGHT / scale,
+        0,
+        0,
+        BOX_WIDTH,
+        BOX_HEIGHT,
+      );
+
+      GifBuilder.addFrame(canvas, {copy: true, delay: frame.delay});
+    });
+
+    GifBuilder.on('finished', function(blob) {
+      // For testing, just open a popup window with the new cropped gif.
+      window.open(URL.createObjectURL(blob));
+    });
+
+    GifBuilder.render();
+  }
+  
   const cropImage = () => {
     const ctx = canvas.getContext('2d')!;
 
@@ -100,14 +167,14 @@
 <svelte:body on:mouseup={stopDrag} on:mousemove={mouseMove} />
 
 <div id="cropper">
-  <img id="image" src="das_ding.png" alt="editable" bind:this={image} />
+  <img id="image" src="horse-eating.gif" alt="editable" bind:this={image} />
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div id="overlay" on:mousedown={startDrag} on:wheel={onWheel}>
     <div id="overlay-cutout" />
   </div>
 </div>
 <input type="range" min="0.5" max="5" step="0.0001" bind:value={scale} on:input={scaleImage} />
-<button on:click={cropImage}>Crop</button>
+<button on:click={doCrop}>Crop</button>
 <canvas width={BOX_WIDTH} height={BOX_HEIGHT} bind:this={canvas}></canvas>
 
 <style>
