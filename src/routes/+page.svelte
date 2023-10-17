@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { parseGIF, decompressFrames } from 'gifuct-js'
-  import GIF from 'gif.js'
+  import { parseGIF, decompressFrames } from 'gifuct-js';
+  import GIF from 'gif.js';
 
   const BOX_HEIGHT = 150;
   const BOX_WIDTH = 900;
@@ -18,9 +18,10 @@
   let xBoundary = 0;
   let yBoundary = 0;
   let scale = 1;
+  let preview = '';
 
   onMount(() => {
-    tempCanvas = document.createElement('canvas')
+    tempCanvas = document.createElement('canvas');
 
     xBoundary = (image.width - BOX_WIDTH) / 2;
     yBoundary = (image.height - BOX_HEIGHT) / 2;
@@ -43,12 +44,12 @@
     } else {
       imageY = 0;
     }
-    image.style.transform = `translate(${imageX*scale}px, ${imageY*scale}px) scale(${scale})`;
+    image.style.transform = `translate(${imageX * scale}px, ${imageY * scale}px) scale(${scale})`;
   };
 
   const scaleImage = () => {
-    xBoundary = (image.width - BOX_WIDTH/scale) / 2;
-    yBoundary = (image.height - BOX_HEIGHT/scale) / 2;
+    xBoundary = (image.width - BOX_WIDTH / scale) / 2;
+    yBoundary = (image.height - BOX_HEIGHT / scale) / 2;
     updateImagePosition();
   };
 
@@ -93,23 +94,24 @@
       cropImage();
     }
   }
-  
+
   async function cropGif(resp: Response) {
     // Actual destination canvas ctx, same size as the crop box.
     const ctx = canvas.getContext('2d')!;
     // Intermediary canvas ctx, same size as the gif.
-    const tempCtx = tempCanvas.getContext('2d')!
+    const tempCtx = tempCanvas.getContext('2d')!;
 
     const GifBuilder = new GIF({
       workers: 2,
       quality: 10,
-      workerScript: "/src/gif.worker.js",
+      workerScript: '/src/gif.worker.js',
+      transparent: '#0000'
     });
 
     // Parse gif and prepare temp canvas
-    let inputGif = parseGIF(await (resp).arrayBuffer());
+    let inputGif = parseGIF(await resp.arrayBuffer());
     let frames = decompressFrames(inputGif, true);
-    
+
     tempCanvas.width = image.width;
     tempCanvas.height = image.height;
     let imageData = tempCtx.createImageData(image.width, image.height);
@@ -119,49 +121,51 @@
       imageData.data.set(frame.patch);
       tempCtx.putImageData(imageData, 0, 0);
 
+      ctx.reset();
       // Fill with transparency in case the crop is smaller than the crop box size.
-      ctx.fillStyle = "transparent"
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.fillStyle = 'transparent';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       ctx.drawImage(
         tempCanvas,
-        (image.width - BOX_WIDTH/scale)/2 - imageX,
-        (image.height - BOX_HEIGHT/scale)/2 - imageY,
+        (image.width - BOX_WIDTH / scale) / 2 - imageX,
+        (image.height - BOX_HEIGHT / scale) / 2 - imageY,
         BOX_WIDTH / scale,
         BOX_HEIGHT / scale,
         0,
         0,
         BOX_WIDTH,
-        BOX_HEIGHT,
+        BOX_HEIGHT
       );
 
-      GifBuilder.addFrame(canvas, {copy: true, delay: frame.delay});
+      GifBuilder.addFrame(canvas, { copy: true, delay: frame.delay });
     });
 
-    GifBuilder.on('finished', function(blob) {
+    GifBuilder.on('finished', function (blob) {
       // For testing, just open a popup window with the new cropped gif.
-      window.open(URL.createObjectURL(blob));
+      preview = URL.createObjectURL(blob);
     });
 
     GifBuilder.render();
   }
-  
+
   const cropImage = () => {
     const ctx = canvas.getContext('2d')!;
 
     ctx.drawImage(
       image,
-      (image.width - BOX_WIDTH/scale)/2 - imageX,
-      (image.height - BOX_HEIGHT/scale)/2 - imageY,
+      (image.width - BOX_WIDTH / scale) / 2 - imageX,
+      (image.height - BOX_HEIGHT / scale) / 2 - imageY,
       BOX_WIDTH / scale,
       BOX_HEIGHT / scale,
       0,
       0,
       BOX_WIDTH,
-      BOX_HEIGHT,
+      BOX_HEIGHT
     );
-  }
 
+    preview = canvas.toDataURL();
+  };
 </script>
 
 <svelte:body on:mouseup={stopDrag} on:mousemove={mouseMove} />
@@ -175,7 +179,8 @@
 </div>
 <input type="range" min="0.5" max="5" step="0.0001" bind:value={scale} on:input={scaleImage} />
 <button on:click={doCrop}>Crop</button>
-<canvas width={BOX_WIDTH} height={BOX_HEIGHT} bind:this={canvas}></canvas>
+<canvas width={BOX_WIDTH} height={BOX_HEIGHT} bind:this={canvas} />
+<img src={preview} alt="result" id="preview" />
 
 <style>
   #cropper {
@@ -210,5 +215,9 @@
     border: 3px solid white;
     border-radius: 10px;
     box-shadow: 0 0 200px 200px #000c;
+  }
+
+  canvas {
+    display: none;
   }
 </style>
