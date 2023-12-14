@@ -3,6 +3,8 @@
   import { parseGIF, decompressFrames } from 'gifuct-js';
   import GIF from 'gif.js';
 
+  const CONTAINER_HEIGHT = 400;
+  const CONTAINER_WIDTH = 1000;
   const BOX_HEIGHT = 150;
   const BOX_WIDTH = 900;
 
@@ -170,11 +172,11 @@
 
 <svelte:body on:mouseup={stopDrag} on:mousemove={mouseMove} />
 
-<div id="cropper">
+<div style:height="{CONTAINER_HEIGHT}px" style:width="{CONTAINER_WIDTH}px" id="cropper">
   <img id="image" src="horse-eating.gif" alt="editable" bind:this={image} />
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div id="overlay" on:mousedown={startDrag} on:wheel={onWheel}>
-    <div id="overlay-cutout" />
+    <div style:height="{BOX_HEIGHT}px" style:width="{BOX_WIDTH}px" id="overlay-cutout" />
   </div>
 </div>
 <input type="range" min="0.5" max="5" step="0.0001" bind:value={scale} on:input={scaleImage} />
@@ -188,9 +190,6 @@
     display: flex;
     align-items: center;
     justify-content: center;
-
-    width: 1000px;
-    height: 400px;
     overflow: hidden;
   }
 
@@ -210,8 +209,6 @@
   }
 
   #overlay-cutout {
-    height: 150px;
-    width: 900px;
     border: 3px solid white;
     border-radius: 10px;
     box-shadow: 0 0 200px 200px #000c;
